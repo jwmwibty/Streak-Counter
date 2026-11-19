@@ -8,6 +8,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
@@ -39,9 +43,9 @@ public class MainActivity extends Activity {
     private static final int INK = Color.rgb(31, 35, 48);
     private static final int MUTED = Color.rgb(126, 130, 145);
     private static final int PURPLE = Color.rgb(111, 86, 222);
-    private static final int BACKGROUND = Color.rgb(247, 247, 251);
+    private static final int BACKGROUND = Color.rgb(249, 246, 239);
     private static final int[] COLORS = {
-            0xFF7359DE, 0xFFE78A66, 0xFF56A58E, 0xFF648BD6, 0xFFD9789A
+            0xFF7359DE, 0xFFE17C55, 0xFF3C9B7F, 0xFF4779C8, 0xFFD65D83
     };
     private static final String[] DAYS = {"M", "T", "W", "T", "F", "S", "S"};
     private static final String[] DAY_NAMES = {
@@ -211,10 +215,8 @@ public class MainActivity extends Activity {
 
         // Brand and date
         LinearLayout top = row();
-        TextView mark = text("D", 19, Color.WHITE, true);
-        mark.setGravity(Gravity.CENTER);
-        mark.setBackground(gradient(new int[]{0xFF8069EF, 0xFF5F48C7}, 14));
-        mark.setElevation(dp(3));
+        View mark = new IconArt("sun", Color.WHITE, 0xFFE77D57);
+        mark.setElevation(dp(4));
         top.addView(mark, lp(42, 42));
 
         TextView brand = text("daylight", 21, INK, true);
@@ -340,10 +342,8 @@ public class MainActivity extends Activity {
             empty.setGravity(Gravity.CENTER);
             pad(empty, 22, 29, 22, 29);
             empty.setBackground(outline(Color.WHITE, 0xFFE9E9F0, 23));
-            TextView initial = text("D", 22, PURPLE, true);
-            initial.setGravity(Gravity.CENTER);
-            initial.setBackground(shape(0xFFF0EDFF, 19));
-            empty.addView(initial, lp(58, 58));
+            View initial = new IconArt("sun", PURPLE, 0xFFF0EDFF);
+            empty.addView(initial, lp(62, 62));
             space(empty, 15);
             TextView emptyTitle = text("Start with one small thing", 17, INK, true);
             emptyTitle.setGravity(Gravity.CENTER);
@@ -407,7 +407,7 @@ public class MainActivity extends Activity {
 
         TextView add = text("+   Add a habit", 16, Color.WHITE, true);
         add.setGravity(Gravity.CENTER);
-        add.setBackground(gradient(new int[]{0xFF8068EF, 0xFF624BCF}, 18));
+        add.setBackground(gradient(new int[]{0xFFE98A60, 0xFFD95D65}, 18));
         add.setElevation(dp(5));
         add.setOnClickListener(v -> showAddDialog());
         addPressFeedback(add);
@@ -429,16 +429,13 @@ public class MainActivity extends Activity {
 
         LinearLayout card = column();
         pad(card, 16, 16, 16, 15);
-        card.setBackground(outline(Color.WHITE, 0xFFE9E9F0, 21));
+        card.setBackground(outline(Color.WHITE, 0xFFEAE4D9, 21));
         card.setElevation(dp(1));
 
         LinearLayout top = row();
-        TextView initial = text(
-                task.name.substring(0, 1).toUpperCase(Locale.getDefault()),
-                18, task.color, true);
-        initial.setGravity(Gravity.CENTER);
-        initial.setBackground(shape(blend(task.color, Color.WHITE, .88f), 15));
-        top.addView(initial, lp(48, 48));
+        View initial = new IconArt(iconFor(task.name), task.color,
+                blend(task.color, Color.WHITE, .88f));
+        top.addView(initial, lp(54, 54));
 
         LinearLayout info = column();
         LinearLayout.LayoutParams infoParams = new LinearLayout.LayoutParams(0, -2, 1);
@@ -464,7 +461,7 @@ public class MainActivity extends Activity {
 
         space(card, 17);
         View separator = new View(this);
-        separator.setBackgroundColor(0xFFEFEFF4);
+        separator.setBackgroundColor(0xFFF0ECE3);
         card.addView(separator, lp(-1, 1));
         space(card, 13);
 
@@ -518,7 +515,7 @@ public class MainActivity extends Activity {
                     task.days[i] ? task.color : 0xFFB5B6C0, true);
             day.setGravity(Gravity.CENTER);
             day.setBackground(shape(
-                    task.days[i] ? blend(task.color, Color.WHITE, .90f) : 0xFFF4F4F7,
+                    task.days[i] ? blend(task.color, Color.WHITE, .90f) : 0xFFF5F1E9,
                     9));
             day.setContentDescription(
                     DAY_NAMES[i] + (task.days[i] ? " scheduled" : " rest day"));
@@ -537,6 +534,169 @@ public class MainActivity extends Activity {
                 (int) (Color.red(first) * (1 - amount) + Color.red(second) * amount),
                 (int) (Color.green(first) * (1 - amount) + Color.green(second) * amount),
                 (int) (Color.blue(first) * (1 - amount) + Color.blue(second) * amount));
+    }
+
+
+    private String iconFor(String habitName) {
+        String name = habitName.toLowerCase(Locale.ROOT);
+        if (name.contains("workout") || name.contains("gym") || name.contains("exercise")
+                || name.contains("strength") || name.contains("lift")) return "dumbbell";
+        if (name.contains("read") || name.contains("book")) return "book";
+        if (name.contains("water") || name.contains("drink") || name.contains("hydrat")) return "water";
+        if (name.contains("meditat") || name.contains("yoga") || name.contains("breath")) return "meditate";
+        if (name.contains("walk") || name.contains("run") || name.contains("jog")) return "walk";
+        if (name.contains("sleep") || name.contains("rest")) return "moon";
+        if (name.contains("study") || name.contains("learn") || name.contains("class")) return "study";
+        if (name.contains("write") || name.contains("journal") || name.contains("diary")) return "write";
+        if (name.contains("music") || name.contains("guitar") || name.contains("piano")) return "music";
+        return "leaf";
+    }
+
+    /** Small original vector illustrations. Drawn locally, so the UI needs no image downloads. */
+    private class IconArt extends View {
+        private final String kind;
+        private final int tint;
+        private final int tile;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        IconArt(String kind, int tint, int tile) {
+            super(MainActivity.this);
+            this.kind = kind;
+            this.tint = tint;
+            this.tile = tile;
+            setContentDescription(kind.equals("sun") ? "Daylight" : kind + " habit");
+        }
+
+        private void line(Canvas canvas, float x1, float y1, float x2, float y2) {
+            canvas.drawLine(x1, y1, x2, y2, paint);
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w = getWidth(), h = getHeight();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(tile);
+            canvas.drawRoundRect(new RectF(0, 0, w, h), dp(17), dp(17), paint);
+
+            float unit = Math.min(w, h) * .62f;
+            canvas.save();
+            canvas.translate((w - unit) / 2f, (h - unit) / 2f);
+            canvas.scale(unit / 100f, unit / 100f);
+
+            paint.setColor(tint);
+            paint.setStrokeWidth(5.5f);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setStyle(Paint.Style.STROKE);
+
+            Path path = new Path();
+            switch (kind) {
+                case "sun":
+                    paint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(50, 50, 15, paint);
+                    paint.setStyle(Paint.Style.STROKE);
+                    for (int i = 0; i < 8; i++) {
+                        double angle = Math.PI * i / 4.0;
+                        float x1 = 50 + (float)Math.cos(angle) * 25;
+                        float y1 = 50 + (float)Math.sin(angle) * 25;
+                        float x2 = 50 + (float)Math.cos(angle) * 36;
+                        float y2 = 50 + (float)Math.sin(angle) * 36;
+                        line(canvas, x1, y1, x2, y2);
+                    }
+                    break;
+                case "dumbbell":
+                    line(canvas, 20, 50, 80, 50);
+                    canvas.drawRoundRect(new RectF(12, 34, 25, 66), 4, 4, paint);
+                    canvas.drawRoundRect(new RectF(75, 34, 88, 66), 4, 4, paint);
+                    line(canvas, 29, 39, 29, 61);
+                    line(canvas, 71, 39, 71, 61);
+                    break;
+                case "book":
+                    path.moveTo(50, 32); path.quadTo(30, 20, 12, 30);
+                    path.lineTo(12, 73); path.quadTo(32, 64, 50, 77);
+                    path.quadTo(68, 64, 88, 73); path.lineTo(88, 30);
+                    path.quadTo(70, 20, 50, 32); path.close();
+                    canvas.drawPath(path, paint);
+                    line(canvas, 50, 33, 50, 76);
+                    line(canvas, 21, 41, 38, 44);
+                    line(canvas, 62, 44, 79, 41);
+                    break;
+                case "water":
+                    path.moveTo(50, 12); path.cubicTo(42, 27, 23, 47, 23, 61);
+                    path.cubicTo(23, 79, 35, 89, 50, 89);
+                    path.cubicTo(65, 89, 77, 79, 77, 61);
+                    path.cubicTo(77, 47, 58, 27, 50, 12);
+                    canvas.drawPath(path, paint);
+                    path.reset(); path.moveTo(37, 64); path.quadTo(39, 77, 51, 78);
+                    canvas.drawPath(path, paint);
+                    break;
+                case "meditate":
+                    paint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(50, 23, 9, paint);
+                    paint.setStyle(Paint.Style.STROKE);
+                    path.moveTo(50, 36); path.lineTo(50, 58);
+                    path.moveTo(50, 43); path.quadTo(32, 43, 26, 55);
+                    path.moveTo(50, 43); path.quadTo(68, 43, 74, 55);
+                    path.moveTo(50, 58); path.quadTo(36, 65, 24, 77);
+                    path.quadTo(50, 88, 76, 77);
+                    path.quadTo(64, 65, 50, 58);
+                    canvas.drawPath(path, paint);
+                    break;
+                case "walk":
+                    paint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(60, 20, 8, paint);
+                    paint.setStyle(Paint.Style.STROKE);
+                    line(canvas, 56, 31, 45, 54);
+                    line(canvas, 51, 40, 32, 49);
+                    line(canvas, 51, 40, 70, 48);
+                    line(canvas, 45, 54, 27, 76);
+                    line(canvas, 45, 54, 66, 73);
+                    break;
+                case "moon":
+                    path.moveTo(67, 19);
+                    path.cubicTo(38, 21, 26, 54, 43, 74);
+                    path.cubicTo(59, 93, 84, 79, 87, 59);
+                    path.cubicTo(72, 68, 48, 54, 50, 36);
+                    path.cubicTo(51, 28, 57, 22, 67, 19);
+                    canvas.drawPath(path, paint);
+                    break;
+                case "study":
+                    path.moveTo(9, 42); path.lineTo(50, 22); path.lineTo(91, 42);
+                    path.lineTo(50, 62); path.close(); canvas.drawPath(path, paint);
+                    line(canvas, 25, 51, 25, 70);
+                    path.reset(); path.moveTo(25, 70); path.quadTo(50, 85, 75, 70);
+                    canvas.drawPath(path, paint);
+                    line(canvas, 91, 42, 91, 67);
+                    paint.setStyle(Paint.Style.FILL); canvas.drawCircle(91, 72, 4, paint);
+                    break;
+                case "write":
+                    path.moveTo(27, 72); path.lineTo(32, 54); path.lineTo(69, 17);
+                    path.quadTo(75, 12, 81, 19); path.lineTo(84, 22);
+                    path.quadTo(89, 28, 82, 34); path.lineTo(45, 70);
+                    path.close(); canvas.drawPath(path, paint);
+                    line(canvas, 33, 55, 44, 66);
+                    line(canvas, 22, 79, 49, 79);
+                    break;
+                case "music":
+                    line(canvas, 63, 20, 63, 67);
+                    line(canvas, 63, 20, 83, 15);
+                    line(canvas, 83, 15, 83, 58);
+                    paint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(49, 69, 10, paint);
+                    canvas.drawCircle(69, 60, 10, paint);
+                    break;
+                default: // Leaf
+                    path.moveTo(18, 77);
+                    path.cubicTo(16, 37, 43, 13, 83, 20);
+                    path.cubicTo(88, 57, 62, 84, 18, 77);
+                    canvas.drawPath(path, paint);
+                    line(canvas, 24, 75, 69, 31);
+                    line(canvas, 44, 56, 42, 37);
+                    line(canvas, 52, 49, 72, 51);
+                    break;
+            }
+            canvas.restore();
+        }
     }
 
     private void confirmDelete(Task task) {
