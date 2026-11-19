@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputFilter;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -30,7 +31,6 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -57,6 +57,7 @@ public class MainActivity extends Activity {
 
     private List<Task> tasks = new ArrayList<>();
     private LinearLayout root;
+    private ScrollView habitScroll;
 
     private int dp(float value) {
         return (int) (getResources().getDisplayMetrics().density * value + .5f);
@@ -183,6 +184,52 @@ public class MainActivity extends Activity {
         });
     }
 
+    private ImageView icon(int resource, int tint) {
+        ImageView image = new ImageView(this);
+        image.setImageResource(resource);
+        image.setColorFilter(tint);
+        image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return image;
+    }
+
+    // Uses Android's haptic setting; no vibration permission or custom vibration pattern.
+    private void confirmHaptic(View view) {
+        view.performHapticFeedback(Build.VERSION.SDK_INT >= 30
+                ? HapticFeedbackConstants.CONFIRM : HapticFeedbackConstants.VIRTUAL_KEY);
+    }
+
+    /** A single rounded track avoids platform progress drawable artifacts. */
+    private class ProgressTrack extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private float fraction;
+        private ValueAnimator animator;
+        ProgressTrack(float target, boolean animate) {
+            super(MainActivity.this);
+            fraction = animate ? 0 : target;
+            if (animate) {
+                animator = ValueAnimator.ofFloat(0, target);
+                animator.setDuration(480);
+                animator.setInterpolator(new DecelerateInterpolator());
+                animator.addUpdateListener(a -> { fraction = (Float) a.getAnimatedValue(); invalidate(); });
+                animator.start();
+            }
+        }
+        @Override protected void onDraw(Canvas canvas) {
+            float r = getHeight() / 2f;
+            paint.setColor(0xFF746A92);
+            canvas.drawRoundRect(0, 0, getWidth(), getHeight(), r, r, paint);
+            if (fraction > 0) {
+                paint.setColor(0xFFE2D6FF);
+                canvas.drawRoundRect(0, 0, getWidth() * fraction, getHeight(), r, r, paint);
+            }
+        }
+        @Override protected void onDetachedFromWindow() {
+            if (animator != null) animator.cancel();
+            super.onDetachedFromWindow();
+        }
+    }
+
     private void save() {
         TaskStore.save(this, tasks);
         render();
@@ -202,6 +249,8 @@ public class MainActivity extends Activity {
             best = Math.max(best, task.streak(today));
         }
 
+        final boolean firstRender = habitScroll == null;
+        final int savedScroll = firstRender ? 0 : habitScroll.getScrollY();
         root = column();
         root.setBackgroundColor(BACKGROUND);
         setContentView(root);
@@ -211,17 +260,15 @@ public class MainActivity extends Activity {
         scroll.setClipToPadding(false);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setFocusableInTouchMode(true);
+        habitScroll = scroll;
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout content = column();
         content.setFocusableInTouchMode(true);
         pad(content, 22, 22, 22, 24);
         scroll.addView(content);
-        // Prevent focus restoration from leaving the brand mark clipped off-screen.
-        scroll.post(() -> {
-            scroll.scrollTo(0, 0);
-            content.requestFocus();
-        });
+        // Keep the user's place when a check-in, delete or permission change rebuilds the list.
+        scroll.post(() -> scroll.scrollTo(0, savedScroll));
 
         // Brand and date
         LinearLayout top = row();
@@ -245,11 +292,11 @@ public class MainActivity extends Activity {
                 0xFFECECF3, 0xFF6E7080);
         top.addView(date);
         content.addView(top);
-        animateEntrance(top, 0);
+        if (firstRender) animateEntrance(top, 0);
 
         space(content, 30);
         TextView eyebrow = text(
-                today.format(DateTimeFormatter.ofPattern("EEEE  /  MMMM d", Locale.getDefault()))
+                today.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.getDefault()))
                         .toUpperCase(Locale.getDefault()),
                 10, PURPLE, true);
         eyebrow.setLetterSpacing(.13f);
@@ -301,38 +348,19 @@ public class MainActivity extends Activity {
         summary.addView(figures);
 
         space(summary, 17);
-        ProgressBar progress = new ProgressBar(
-                this, null, android.R.attr.progressBarStyleHorizontal);
-        progress.setMax(100);
-        progress.setProgress(0);
-        progress.setProgressTintList(ColorStateList.valueOf(0xFFD3C5FF));
-        progress.setProgressBackgroundTintList(ColorStateList.valueOf(0xFF777096));
+        float progressValue = due == 0 ? 0f : Math.min(1f, (float) done / due);
+        ProgressTrack progress = new ProgressTrack(progressValue, firstRender);
+        progress.setContentDescription(done + " of " + due + " habits completed");
         summary.addView(progress, lp(-1, 7));
 
-        int progressValue = due == 0 ? 0 : Math.min(100, done * 100 / due);
-        progress.post(() -> {
-            ValueAnimator animator = ValueAnimator.ofInt(0, progressValue);
-            animator.setDuration(760);
-            animator.setInterpolator(new DecelerateInterpolator());
-            animator.addUpdateListener(a ->
-                    progress.setProgress((Integer) a.getAnimatedValue()));
-            animator.start();
-        });
-
-        space(summary, 16);
+        space(summary, 18);
         LinearLayout stats = row();
         addSummaryStat(stats, "COMPLETED", done + " of " + due);
-        View divider = new View(this);
-        divider.setBackgroundColor(0x557D77A8);
-        LinearLayout.LayoutParams dividerParams = lp(1, 32);
-        dividerParams.leftMargin = dp(13);
-        dividerParams.rightMargin = dp(13);
-        stats.addView(divider, dividerParams);
         addSummaryStat(stats, "BEST CURRENT STREAK", best + (best == 1 ? " day" : " days"));
         summary.addView(stats);
 
         content.addView(summary);
-        animateEntrance(summary, 1);
+        if (firstRender) animateEntrance(summary, 1);
         space(content, 29);
 
         // Habit section heading
@@ -353,7 +381,7 @@ public class MainActivity extends Activity {
             LinearLayout empty = column();
             empty.setGravity(Gravity.CENTER);
             pad(empty, 22, 29, 22, 29);
-            empty.setBackground(outline(Color.WHITE, 0xFFE9E9F0, 23));
+            empty.setBackground(shape(Color.WHITE, 23));
             ImageView initial = new ImageView(this);
             initial.setImageResource(R.drawable.ic_app);
             initial.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -370,13 +398,13 @@ public class MainActivity extends Activity {
             emptyBody.setLineSpacing(dp(3), 1f);
             empty.addView(emptyBody);
             content.addView(empty);
-            animateEntrance(empty, 2);
+            if (firstRender) animateEntrance(empty, 2);
         } else {
             int index = 2;
             for (Task task : tasks) {
                 View card = taskCard(task, today);
                 content.addView(card);
-                animateEntrance(card, index++);
+                if (firstRender) animateEntrance(card, Math.min(index++, 5));
                 space(content, 12);
             }
         }
@@ -386,13 +414,17 @@ public class MainActivity extends Activity {
             LinearLayout notice = row();
             pad(notice, 15, 14, 15, 14);
             notice.setBackground(shape(0xFFEDEAFF, 16));
+            ImageView bell = icon(R.drawable.ic_bell, PURPLE);
+            notice.addView(bell, lp(24, 24));
             LinearLayout noticeCopy = column();
+            LinearLayout.LayoutParams noticeCopyParams = new LinearLayout.LayoutParams(0, -2, 1);
+            noticeCopyParams.leftMargin = dp(12);
             noticeCopy.addView(text("A gentle reminder", 13, PURPLE, true));
             space(noticeCopy, 4);
             noticeCopy.addView(text(
                     "Enable notifications for your evening check-in.",
                     11, 0xFF77718F, false));
-            notice.addView(noticeCopy, new LinearLayout.LayoutParams(0, -2, 1));
+            notice.addView(noticeCopy, noticeCopyParams);
             TextView enable = text("Enable", 12, PURPLE, true);
             enable.setGravity(Gravity.CENTER);
             notice.addView(enable);
@@ -419,10 +451,17 @@ public class MainActivity extends Activity {
         pad(footer, 22, 10, 22, 16);
         footer.setBackgroundColor(BACKGROUND);
 
-        TextView add = text("+   Add a habit", 16, Color.WHITE, true);
+        LinearLayout add = row();
         add.setGravity(Gravity.CENTER);
-        add.setBackground(gradient(new int[]{0xFFE98A60, 0xFFD95D65}, 18));
-        add.setElevation(dp(5));
+        add.setBackground(ripple(0xFFDF6F5C, 0x55FFFFFF, 18));
+        add.setElevation(dp(3));
+        add.addView(icon(R.drawable.ic_plus, Color.WHITE), lp(21, 21));
+        TextView addLabel = text("Add a habit", 16, Color.WHITE, true);
+        LinearLayout.LayoutParams addLabelParams = lp(-2, -2);
+        addLabel.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        addLabelParams.leftMargin = dp(9);
+        add.addView(addLabel, addLabelParams);
+        add.setContentDescription("Add a habit");
         add.setOnClickListener(v -> showAddDialog());
         addPressFeedback(add);
         footer.addView(add, lp(-1, 56));
@@ -443,8 +482,8 @@ public class MainActivity extends Activity {
 
         LinearLayout card = column();
         pad(card, 16, 16, 16, 15);
-        card.setBackground(outline(Color.WHITE, 0xFFEAE4D9, 21));
-        card.setElevation(dp(1));
+        card.setBackground(shape(Color.WHITE, 22));
+        card.setElevation(dp(2));
 
         LinearLayout top = row();
         View initial = new IconArt(iconFor(task.name), task.color,
@@ -466,47 +505,53 @@ public class MainActivity extends Activity {
                         + (scheduled ? (done ? "Completed today" : "Scheduled today") : "Rest day"),
                 11, MUTED, false));
 
-        TextView more = text("•••", 16, MUTED, true);
-        more.setGravity(Gravity.CENTER);
+        ImageView more = icon(R.drawable.ic_more, MUTED);
+        more.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         more.setContentDescription("Options for " + task.name);
-        top.addView(more, lp(38, 40));
+        more.setBackground(ripple(Color.TRANSPARENT, 0x227E8291, 24));
+        pad(more, 12, 12, 12, 12);
+        top.addView(more, lp(48, 48));
         more.setOnClickListener(v -> confirmDelete(task));
         card.addView(top);
 
-        space(card, 17);
-        View separator = new View(this);
-        separator.setBackgroundColor(0xFFF0ECE3);
-        card.addView(separator, lp(-1, 1));
-        space(card, 13);
+        space(card, 20);
 
         LinearLayout lower = row();
         LinearLayout streakInfo = column();
         lower.addView(streakInfo, new LinearLayout.LayoutParams(0, -2, 1));
 
-        TextView streakCount = text(
-                String.valueOf(task.streak(today)),
-                23, task.color, true);
-        streakInfo.addView(streakCount);
+        LinearLayout streakRow = row();
+        streakRow.addView(icon(R.drawable.ic_flame, task.color), lp(19, 19));
+        TextView streakCount = text(String.valueOf(task.streak(today)), 23, INK, true);
+        LinearLayout.LayoutParams streakParams = lp(-2, -2);
+        streakParams.leftMargin = dp(6);
+        streakRow.addView(streakCount, streakParams);
+        streakInfo.addView(streakRow);
         space(streakInfo, 3);
         streakInfo.addView(text("DAY STREAK", 9, MUTED, true));
 
-        TextView action = text(
-                done ? "Completed" : scheduled ? "Check in" : "Rest day",
-                13,
-                done ? 0xFF43836C : scheduled ? Color.WHITE : MUTED,
-                true);
+        LinearLayout action = row();
         action.setGravity(Gravity.CENTER);
-        pad(action, 17, 0, 17, 0);
+        pad(action, 15, 0, 15, 0);
+        int actionText = done ? 0xFF387C62 : scheduled ? Color.WHITE : MUTED;
         action.setBackground(ripple(
-                done ? 0xFFE7F4EC : scheduled ? task.color : 0xFFF1F1F4,
-                done ? 0xFFD4EBDD : 0x44726AD0, 14));
-        action.setContentDescription(
-                done ? task.name + " completed today" :
-                        scheduled ? "Check in " + task.name : task.name + " rest day");
+                done ? 0xFFE7F4EC : scheduled ? task.color : 0xFFF4F2EF,
+                0x33FFFFFF, 14));
+        action.addView(icon(scheduled ? R.drawable.ic_check : R.drawable.ic_moon,
+                actionText), lp(17, 17));
+        TextView actionLabel = text(done ? "Completed" : scheduled ? "Check in" : "Rest day",
+                13, actionText, true);
+        LinearLayout.LayoutParams actionLabelParams = lp(-2, -2);
+        actionLabel.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        actionLabelParams.leftMargin = dp(7);
+        action.addView(actionLabel, actionLabelParams);
+        action.setContentDescription(done ? task.name + " completed today" :
+                scheduled ? "Check in " + task.name : task.name + " rest day");
         if (scheduled && !done) {
             action.setOnClickListener(v -> {
                 LocalDate now = LocalDate.now();
                 if (task.scheduled(now) && task.completions.add(now)) {
+                    confirmHaptic(v);
                     save();
                     boolean allDone = true;
                     for (Task item : tasks) {
@@ -522,31 +567,26 @@ public class MainActivity extends Activity {
             });
             addPressFeedback(action);
         }
-        lower.addView(action, lp(-2, 43));
+        lower.addView(action, lp(-2, 48));
         card.addView(lower);
 
-        space(card, 16);
-        LinearLayout schedule = row();
-        TextView scheduleLabel = text("WEEKLY PLAN", 9, MUTED, true);
+        space(card, 19);
+        TextView scheduleLabel = text("WEEKLY PLAN", 10, MUTED, true);
         scheduleLabel.setLetterSpacing(.08f);
-        schedule.addView(scheduleLabel, new LinearLayout.LayoutParams(0, -2, 1));
-
+        card.addView(scheduleLabel);
+        space(card, 9);
+        LinearLayout schedule = row();
         for (int i = 0; i < 7; i++) {
-            TextView day = text(DAYS[i], 10,
-                    task.days[i] ? task.color : 0xFFB5B6C0, true);
+            TextView day = text(DAYS[i], 11, task.days[i] ? task.color : 0xFFA5A3A9, true);
             day.setGravity(Gravity.CENTER);
-            day.setBackground(shape(
-                    task.days[i] ? blend(task.color, Color.WHITE, .90f) : 0xFFF5F1E9,
-                    9));
-            day.setContentDescription(
-                    DAY_NAMES[i] + (task.days[i] ? " scheduled" : " rest day"));
-            LinearLayout.LayoutParams dayParams = lp(25, 25);
-            dayParams.leftMargin = dp(4);
+            day.setBackground(shape(task.days[i]
+                    ? blend(task.color, Color.WHITE, .90f) : 0xFFF7F5F1, 10));
+            day.setContentDescription(DAY_NAMES[i] + (task.days[i] ? " scheduled" : " rest day"));
+            LinearLayout.LayoutParams dayParams = new LinearLayout.LayoutParams(0, dp(32), 1);
+            if (i > 0) dayParams.leftMargin = dp(5);
             schedule.addView(day, dayParams);
         }
-
         card.addView(schedule);
-        addPressFeedback(card);
         return card;
     }
 
@@ -728,7 +768,7 @@ public class MainActivity extends Activity {
         pad(screen, 28, 30, 28, 28);
         screen.setBackgroundColor(0xFF101C1E);
 
-        TextView eyebrow = text("DAYLIGHT  /  STREAK UNLOCKED", 10, 0xFF829496, true);
+        TextView eyebrow = text("DAYLIGHT  ·  STREAK UNLOCKED", 10, 0xFF829496, true);
         eyebrow.setGravity(Gravity.CENTER);
         eyebrow.setLetterSpacing(.17f);
         screen.addView(eyebrow);
@@ -770,11 +810,20 @@ public class MainActivity extends Activity {
             space(dayCell, 7);
             boolean scheduled = task.scheduled(date);
             boolean completed = task.done(date);
-            TextView mark = text(completed ? "✓" : scheduled ? "·" : "–",
-                    15, completed ? 0xFF142021 : 0xFF65777A, true);
-            mark.setGravity(Gravity.CENTER);
+            FrameLayout mark = new FrameLayout(this);
             mark.setBackground(shape(completed ? 0xFFFF805C :
                     (date.equals(today) ? 0xFF263638 : 0xFF1A292B), 10));
+            mark.setContentDescription(DAY_NAMES[i] + (completed ? ", completed" :
+                    scheduled ? ", scheduled" : ", rest day"));
+            if (completed) {
+                ImageView check = icon(R.drawable.ic_check, 0xFF142021);
+                FrameLayout.LayoutParams checkParams = new FrameLayout.LayoutParams(dp(17), dp(17), Gravity.CENTER);
+                mark.addView(check, checkParams);
+            } else if (scheduled) {
+                View dot = new View(this);
+                dot.setBackground(shape(0xFF65777A, 8));
+                mark.addView(dot, new FrameLayout.LayoutParams(dp(4), dp(4), Gravity.CENTER));
+            }
             dayCell.addView(mark, lp(30, 30));
         }
         screen.addView(week);
@@ -804,6 +853,7 @@ public class MainActivity extends Activity {
         button.setBackground(gradient(new int[]{0xFFFF9A55, 0xFFFF604F}, 13));
         screen.addView(button, lp(-1, 49));
         button.setOnClickListener(v -> dialog.dismiss());
+        addPressFeedback(button);
 
         dialog.setContentView(screen);
         dialog.show();
@@ -818,15 +868,15 @@ public class MainActivity extends Activity {
         }
         fire.startBurst();
         ValueAnimator number = ValueAnimator.ofInt(Math.max(0, streak - 1), streak);
-        number.setStartDelay(520);
-        number.setDuration(520);
+        number.setStartDelay(240);
+        number.setDuration(350);
         number.setInterpolator(new DecelerateInterpolator());
         number.addUpdateListener(anim -> count.setText(
                 String.valueOf((Integer) anim.getAnimatedValue())));
         number.start();
-        count.setScaleX(.72f);
-        count.setScaleY(.72f);
-        count.animate().scaleX(1f).scaleY(1f).setStartDelay(520).setDuration(520).start();
+        count.setScaleX(.9f);
+        count.setScaleY(.9f);
+        count.animate().scaleX(1f).scaleY(1f).setStartDelay(240).setDuration(350).start();
     }
 
     /** Full-screen flame celebration, drawn locally with a short burst of sparks. */
@@ -842,7 +892,7 @@ public class MainActivity extends Activity {
 
         void startBurst() {
             animator = ValueAnimator.ofFloat(0f, 1f);
-            animator.setDuration(1750);
+            animator.setDuration(1050);
             animator.setInterpolator(new DecelerateInterpolator());
             animator.addUpdateListener(a -> {
                 progress = (Float) a.getAnimatedValue();
@@ -856,13 +906,14 @@ public class MainActivity extends Activity {
             float cx = getWidth() / 2f;
             float cy = getHeight() * .78f;
             float appear = Math.min(1f, progress * 2.3f);
-            float pulse = 1f + (float)Math.sin(progress * Math.PI * 5) * .035f;
+            float pulse = 1f + (float)Math.sin(progress * Math.PI * 3) * .018f;
             float alpha = Math.max(.18f, 1f - Math.max(0f, progress - .35f) * .7f);
 
             canvas.save();
             canvas.translate(cx, cy);
-            canvas.scale((.58f + appear * .42f) * pulse,
-                    (.58f + appear * .42f) * pulse);
+            float artScale = Math.min(getWidth() / 190f, getHeight() / 178f);
+            canvas.scale(artScale * (.78f + appear * .22f) * pulse,
+                    artScale * (.78f + appear * .22f) * pulse);
 
             p.setStyle(Paint.Style.FILL);
             p.setColor(Color.argb((int)(alpha * 45), 255, 75, 48));
@@ -935,6 +986,7 @@ public class MainActivity extends Activity {
                         + " streak and check-ins will be permanently removed.")
                 .setNegativeButton("Keep habit", null)
                 .setPositiveButton("Delete", (dialog, which) -> {
+                    confirmHaptic(root);
                     tasks.remove(task);
                     save();
                 })
@@ -1067,6 +1119,7 @@ public class MainActivity extends Activity {
                     return;
                 }
 
+                confirmHaptic(v);
                 tasks.add(Task.create(value, COLORS[colorChoice[0]], selected));
                 save();
                 dialog.dismiss();

@@ -43,7 +43,7 @@ public class ReminderReceiver extends BroadcastReceiver {
         PendingIntent content = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         String message = atRisk.size() == 1 ? "Your " + atRisk.get(0) + " streak is waiting for you." : atRisk.size() + " streaks need a check-in today: " + String.join(", ", atRisk);
         Notification notification = new Notification.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification).setContentTitle("Don't lose your streak ✨")
+            .setSmallIcon(R.drawable.ic_notification).setContentTitle("Don't lose your streak")
             .setContentText(message).setStyle(new Notification.BigTextStyle().bigText(message))
             .setContentIntent(content).setAutoCancel(true).build();
         manager.notify(100, notification);
