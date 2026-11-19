@@ -210,11 +210,18 @@ public class MainActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
         scroll.setVerticalScrollBarEnabled(false);
+        scroll.setFocusableInTouchMode(true);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout content = column();
+        content.setFocusableInTouchMode(true);
         pad(content, 22, 22, 22, 24);
         scroll.addView(content);
+        // Prevent focus restoration from leaving the brand mark clipped off-screen.
+        scroll.post(() -> {
+            scroll.scrollTo(0, 0);
+            content.requestFocus();
+        });
 
         // Brand and date
         LinearLayout top = row();
@@ -347,7 +354,9 @@ public class MainActivity extends Activity {
             empty.setGravity(Gravity.CENTER);
             pad(empty, 22, 29, 22, 29);
             empty.setBackground(outline(Color.WHITE, 0xFFE9E9F0, 23));
-            View initial = new IconArt("sun", PURPLE, 0xFFF0EDFF);
+            ImageView initial = new ImageView(this);
+            initial.setImageResource(R.drawable.ic_app);
+            initial.setScaleType(ImageView.ScaleType.FIT_CENTER);
             empty.addView(initial, lp(62, 62));
             space(empty, 15);
             TextView emptyTitle = text("Start with one small thing", 17, INK, true);
