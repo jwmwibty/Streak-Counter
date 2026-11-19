@@ -506,7 +506,7 @@ public class MainActivity extends Activity {
                             break;
                         }
                     }
-                    showStreakCelebration(task.name, task.streak(now), allDone);
+                    showStreakCelebration(task, task.streak(now), allDone);
                 } else {
                     render();
                 }
@@ -712,63 +712,115 @@ public class MainActivity extends Activity {
     }
 
 
-    private void showStreakCelebration(String habitName, int streak, boolean allDoneToday) {
+    private void showStreakCelebration(Task task, int streak, boolean allDoneToday) {
         Dialog dialog = new Dialog(this);
-        LinearLayout panel = column();
-        panel.setGravity(Gravity.CENTER);
-        pad(panel, 26, 24, 26, 24);
-        panel.setBackground(shape(0xFF29243E, 28));
+        LinearLayout screen = column();
+        screen.setGravity(Gravity.CENTER);
+        pad(screen, 28, 30, 28, 28);
+        screen.setBackgroundColor(0xFF101C1E);
 
+        TextView eyebrow = text("DAYLIGHT  /  STREAK UNLOCKED", 10, 0xFF829496, true);
+        eyebrow.setGravity(Gravity.CENTER);
+        eyebrow.setLetterSpacing(.17f);
+        screen.addView(eyebrow);
+
+        space(screen, 24);
         FlameCelebrationView fire = new FlameCelebrationView();
-        panel.addView(fire, lp(190, 150));
+        screen.addView(fire, lp(190, 178));
 
-        space(panel, 5);
-        TextView title = text(allDoneToday ? "STREAK SECURED" : "STREAK CONTINUES",
-                19, Color.WHITE, true);
-        title.setGravity(Gravity.CENTER);
-        title.setLetterSpacing(.08f);
-        panel.addView(title);
-
-        space(panel, 9);
-        TextView subtitle = text(
-                allDoneToday
-                        ? "Every habit checked in. You showed up today."
-                        : habitName + " is complete. Keep the momentum going.",
-                13, 0xFFD4CDE8, false);
-        subtitle.setGravity(Gravity.CENTER);
-        subtitle.setLineSpacing(dp(3), 1f);
-        panel.addView(subtitle);
-
-        space(panel, 15);
-        TextView count = text(streak + (streak == 1 ? " DAY STREAK" : " DAY STREAK"),
-                11, 0xFFFFB27D, true);
+        space(screen, 2);
+        TextView count = text(String.valueOf(Math.max(0, streak - 1)), 48, 0xFFFF684F, true);
         count.setGravity(Gravity.CENTER);
-        count.setLetterSpacing(.12f);
-        panel.addView(count);
+        count.setIncludeFontPadding(false);
+        screen.addView(count);
 
-        space(panel, 22);
-        TextView button = text("Keep it going", 14, 0xFF29243E, true);
+        TextView unit = text("DAY STREAK", 13, 0xFFFF7657, true);
+        unit.setGravity(Gravity.CENTER);
+        unit.setLetterSpacing(.1f);
+        screen.addView(unit);
+
+        space(screen, 29);
+        LinearLayout week = row();
+        week.setGravity(Gravity.CENTER);
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(
+                java.time.DayOfWeek.MONDAY));
+        String[] labels = {"M", "T", "W", "T", "F", "S", "S"};
+        for (int i = 0; i < 7; i++) {
+            LocalDate date = monday.plusDays(i);
+            LinearLayout dayCell = column();
+            dayCell.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams cellParams = new LinearLayout.LayoutParams(0, -2, 1);
+            week.addView(dayCell, cellParams);
+
+            TextView dayLabel = text(labels[i], 9,
+                    date.equals(today) ? 0xFFFF7657 : 0xFF718184, true);
+            dayLabel.setGravity(Gravity.CENTER);
+            dayCell.addView(dayLabel);
+
+            space(dayCell, 7);
+            boolean scheduled = task.scheduled(date);
+            boolean completed = task.done(date);
+            TextView mark = text(completed ? "✓" : scheduled ? "·" : "–",
+                    15, completed ? 0xFF142021 : 0xFF65777A, true);
+            mark.setGravity(Gravity.CENTER);
+            mark.setBackground(shape(completed ? 0xFFFF805C :
+                    (date.equals(today) ? 0xFF263638 : 0xFF1A292B), 10));
+            dayCell.addView(mark, lp(30, 30));
+        }
+        screen.addView(week);
+
+        space(screen, 19);
+        TextView message = text(
+                allDoneToday ? "You reached a perfect day!" :
+                        task.name + " is another promise kept.",
+                13, 0xFFE0E8E5, true);
+        message.setGravity(Gravity.CENTER);
+        screen.addView(message);
+
+        space(screen, 5);
+        TextView sub = text(
+                allDoneToday ? "Every habit checked. Keep the fire alive." :
+                        "One small win today. Come back tomorrow.",
+                11, 0xFF8DA0A0, false);
+        sub.setGravity(Gravity.CENTER);
+        screen.addView(sub);
+
+        View flexible = new View(this);
+        screen.addView(flexible, new LinearLayout.LayoutParams(1, 0, 1));
+
+        TextView button = text("LET'S KEEP GOING", 12, 0xFF142021, true);
         button.setGravity(Gravity.CENTER);
-        button.setBackground(gradient(new int[]{0xFFFFB477, 0xFFFF805F}, 15));
-        panel.addView(button, lp(-1, 48));
+        button.setLetterSpacing(.08f);
+        button.setBackground(gradient(new int[]{0xFFFF9A55, 0xFFFF604F}, 13));
+        screen.addView(button, lp(-1, 49));
         button.setOnClickListener(v -> dialog.dismiss());
 
-        dialog.setContentView(panel);
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-            dialog.getWindow().setDimAmount(.58f);
-        }
+        dialog.setContentView(screen);
         dialog.show();
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
             dialog.getWindow().setLayout(
-                    getResources().getDisplayMetrics().widthPixels - dp(54),
-                    WindowManager.LayoutParams.WRAP_CONTENT);
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT);
+            dialog.getWindow().setStatusBarColor(0xFF101C1E);
+            dialog.getWindow().setNavigationBarColor(0xFF101C1E);
+            dialog.getWindow().setDimAmount(0f);
         }
         fire.startBurst();
+        ValueAnimator number = ValueAnimator.ofInt(Math.max(0, streak - 1), streak);
+        number.setStartDelay(520);
+        number.setDuration(520);
+        number.setInterpolator(new DecelerateInterpolator());
+        number.addUpdateListener(anim -> count.setText(
+                String.valueOf((Integer) anim.getAnimatedValue())));
+        number.start();
+        count.setScaleX(.72f);
+        count.setScaleY(.72f);
+        count.animate().scaleX(1f).scaleY(1f).setStartDelay(520).setDuration(520).start();
     }
 
-    /** A lightweight Canvas fire-burst. No GIFs, downloads or extra libraries. */
+    /** Full-screen flame celebration, drawn locally with a short burst of sparks. */
     private class FlameCelebrationView extends View {
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         private float progress;
@@ -781,7 +833,7 @@ public class MainActivity extends Activity {
 
         void startBurst() {
             animator = ValueAnimator.ofFloat(0f, 1f);
-            animator.setDuration(1450);
+            animator.setDuration(1750);
             animator.setInterpolator(new DecelerateInterpolator());
             animator.addUpdateListener(a -> {
                 progress = (Float) a.getAnimatedValue();
@@ -793,53 +845,70 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             float cx = getWidth() / 2f;
-            float cy = getHeight() * .72f;
-            float rise = 1f - progress * .45f;
-            float alpha = Math.max(0f, 1f - progress * .72f);
+            float cy = getHeight() * .78f;
+            float appear = Math.min(1f, progress * 2.3f);
+            float pulse = 1f + (float)Math.sin(progress * Math.PI * 5) * .035f;
+            float alpha = Math.max(.18f, 1f - Math.max(0f, progress - .35f) * .7f);
 
             canvas.save();
             canvas.translate(cx, cy);
-            canvas.scale(.72f + progress * .3f, .72f + progress * .3f);
+            canvas.scale((.58f + appear * .42f) * pulse,
+                    (.58f + appear * .42f) * pulse);
 
             p.setStyle(Paint.Style.FILL);
-            p.setColor(Color.argb((int)(alpha * 55), 255, 111, 74));
-            canvas.drawCircle(0, -42, 59 + progress * 16, p);
-            p.setColor(Color.argb((int)(alpha * 230), 255, 139, 82));
-            Path outer = new Path();
-            outer.moveTo(0, -112 * rise);
-            outer.cubicTo(-13, -84, -48, -62, -43, -28);
-            outer.cubicTo(-41, 7, -19, 20, 0, 17);
-            outer.cubicTo(32, 20, 49, -5, 43, -35);
-            outer.cubicTo(38, -61, 12, -83, 0, -112 * rise);
-            canvas.drawPath(outer, p);
+            p.setColor(Color.argb((int)(alpha * 45), 255, 75, 48));
+            canvas.drawCircle(0, -45, 70, p);
 
-            p.setColor(Color.argb((int)(alpha * 245), 255, 197, 112));
-            Path middle = new Path();
-            middle.moveTo(0, -78 * rise);
-            middle.cubicTo(-8, -55, -25, -39, -23, -16);
-            middle.cubicTo(-20, 5, -7, 13, 0, 12);
-            middle.cubicTo(21, 8, 25, -10, 17, -30);
-            middle.cubicTo(13, -47, 4, -61, 0, -78 * rise);
-            canvas.drawPath(middle, p);
+            p.setColor(0xFFEF263D);
+            Path red = new Path();
+            red.moveTo(0, -119);
+            red.cubicTo(-23, -91, -61, -69, -54, -28);
+            red.cubicTo(-50, 10, -24, 28, 0, 28);
+            red.cubicTo(36, 28, 59, 0, 53, -36);
+            red.cubicTo(49, -68, 15, -91, 0, -119);
+            canvas.drawPath(red, p);
 
-            p.setColor(Color.argb((int)(alpha * 250), 255, 239, 190));
-            canvas.drawOval(new RectF(-8, -29, 8, 5), p);
+            p.setColor(0xFFFF713C);
+            Path orange = new Path();
+            orange.moveTo(0, -102);
+            orange.cubicTo(-13, -76, -43, -53, -38, -22);
+            orange.cubicTo(-34, 8, -14, 20, 1, 20);
+            orange.cubicTo(28, 18, 42, -5, 35, -32);
+            orange.cubicTo(31, -56, 9, -78, 0, -102);
+            canvas.drawPath(orange, p);
+
+            p.setColor(0xFFFFC34F);
+            Path gold = new Path();
+            gold.moveTo(0, -78);
+            gold.cubicTo(-8, -57, -25, -38, -21, -15);
+            gold.cubicTo(-18, 7, -7, 13, 1, 13);
+            gold.cubicTo(19, 10, 25, -8, 17, -29);
+            gold.cubicTo(13, -48, 4, -63, 0, -78);
+            canvas.drawPath(gold, p);
+
+            p.setColor(0xFFFFF4D8);
+            canvas.drawOval(new RectF(-11, -36, 11, 5), p);
+            p.setColor(0xFFFFFFFF);
+            canvas.drawOval(new RectF(-7, -29, 7, -2), p);
             canvas.restore();
 
-            // Sparks shoot outward in a short, clean burst.
+            float sparks = progress < .65f ? progress / .65f : 1f;
+            float fade = progress < .65f ? 1f : 1f - (progress - .65f) / .35f;
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
-            p.setStrokeWidth(dp(2.5f));
-            for (int i = 0; i < 12; i++) {
-                double angle = (Math.PI * 2 * i / 12.0) - Math.PI / 2;
-                float distance = dp(28 + progress * 62);
+            for (int i = 0; i < 16; i++) {
+                double angle = Math.PI * 2 * i / 16.0 - Math.PI / 2;
+                float distance = dp(22 + sparks * (i % 3 == 0 ? 76 : 54));
                 float sx = cx + (float)Math.cos(angle) * distance;
-                float sy = cy - dp(48) + (float)Math.sin(angle) * distance;
-                int color = i % 3 == 0 ? 0xFFFFD18D : i % 3 == 1 ? 0xFFFF8C69 : 0xFFFFE7B8;
-                p.setColor(Color.argb((int)(alpha * 255), Color.red(color),
+                float sy = cy - dp(43) + (float)Math.sin(angle) * distance;
+                int color = i % 3 == 0 ? 0xFFFFD36B :
+                        i % 3 == 1 ? 0xFFFF684F : 0xFFFFA15C;
+                p.setColor(Color.argb((int)(fade * 255), Color.red(color),
                         Color.green(color), Color.blue(color)));
-                canvas.drawLine(sx, sy, sx + (float)Math.cos(angle) * dp(7),
-                        sy + (float)Math.sin(angle) * dp(7), p);
+                p.setStrokeWidth(dp(i % 3 == 0 ? 3 : 2));
+                float length = dp(i % 2 == 0 ? 8 : 5);
+                canvas.drawLine(sx, sy, sx + (float)Math.cos(angle) * length,
+                        sy + (float)Math.sin(angle) * length, p);
             }
             p.setStyle(Paint.Style.FILL);
         }
