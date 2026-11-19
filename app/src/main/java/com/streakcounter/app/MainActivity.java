@@ -3,6 +3,7 @@ package com.streakcounter.app;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -27,6 +28,8 @@ import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -215,9 +218,11 @@ public class MainActivity extends Activity {
 
         // Brand and date
         LinearLayout top = row();
-        View mark = new IconArt("sun", Color.WHITE, 0xFFE77D57);
-        mark.setElevation(dp(4));
-        top.addView(mark, lp(42, 42));
+        ImageView mark = new ImageView(this);
+        mark.setImageResource(R.drawable.ic_app);
+        mark.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        mark.setElevation(dp(3));
+        top.addView(mark, lp(46, 46));
 
         TextView brand = text("daylight", 21, INK, true);
         LinearLayout.LayoutParams brandParams = lp(-2, -2);
@@ -494,7 +499,14 @@ public class MainActivity extends Activity {
                 LocalDate now = LocalDate.now();
                 if (task.scheduled(now) && task.completions.add(now)) {
                     save();
-                    Toast.makeText(this, "Habit checked in.", Toast.LENGTH_SHORT).show();
+                    boolean allDone = true;
+                    for (Task item : tasks) {
+                        if (item.scheduled(now) && !item.done(now)) {
+                            allDone = false;
+                            break;
+                        }
+                    }
+                    showStreakCelebration(task.name, task.streak(now), allDone);
                 } else {
                     render();
                 }
@@ -696,6 +708,145 @@ public class MainActivity extends Activity {
                     break;
             }
             canvas.restore();
+        }
+    }
+
+
+    private void showStreakCelebration(String habitName, int streak, boolean allDoneToday) {
+        Dialog dialog = new Dialog(this);
+        LinearLayout panel = column();
+        panel.setGravity(Gravity.CENTER);
+        pad(panel, 26, 24, 26, 24);
+        panel.setBackground(shape(0xFF29243E, 28));
+
+        FlameCelebrationView fire = new FlameCelebrationView();
+        panel.addView(fire, lp(190, 150));
+
+        space(panel, 5);
+        TextView title = text(allDoneToday ? "STREAK SECURED" : "STREAK CONTINUES",
+                19, Color.WHITE, true);
+        title.setGravity(Gravity.CENTER);
+        title.setLetterSpacing(.08f);
+        panel.addView(title);
+
+        space(panel, 9);
+        TextView subtitle = text(
+                allDoneToday
+                        ? "Every habit checked in. You showed up today."
+                        : habitName + " is complete. Keep the momentum going.",
+                13, 0xFFD4CDE8, false);
+        subtitle.setGravity(Gravity.CENTER);
+        subtitle.setLineSpacing(dp(3), 1f);
+        panel.addView(subtitle);
+
+        space(panel, 15);
+        TextView count = text(streak + (streak == 1 ? " DAY STREAK" : " DAY STREAK"),
+                11, 0xFFFFB27D, true);
+        count.setGravity(Gravity.CENTER);
+        count.setLetterSpacing(.12f);
+        panel.addView(count);
+
+        space(panel, 22);
+        TextView button = text("Keep it going", 14, 0xFF29243E, true);
+        button.setGravity(Gravity.CENTER);
+        button.setBackground(gradient(new int[]{0xFFFFB477, 0xFFFF805F}, 15));
+        panel.addView(button, lp(-1, 48));
+        button.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.setContentView(panel);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            dialog.getWindow().setDimAmount(.58f);
+        }
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            dialog.getWindow().setLayout(
+                    getResources().getDisplayMetrics().widthPixels - dp(54),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+        }
+        fire.startBurst();
+    }
+
+    /** A lightweight Canvas fire-burst. No GIFs, downloads or extra libraries. */
+    private class FlameCelebrationView extends View {
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private float progress;
+        private ValueAnimator animator;
+
+        FlameCelebrationView() {
+            super(MainActivity.this);
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        }
+
+        void startBurst() {
+            animator = ValueAnimator.ofFloat(0f, 1f);
+            animator.setDuration(1450);
+            animator.setInterpolator(new DecelerateInterpolator());
+            animator.addUpdateListener(a -> {
+                progress = (Float) a.getAnimatedValue();
+                invalidate();
+            });
+            animator.start();
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float cx = getWidth() / 2f;
+            float cy = getHeight() * .72f;
+            float rise = 1f - progress * .45f;
+            float alpha = Math.max(0f, 1f - progress * .72f);
+
+            canvas.save();
+            canvas.translate(cx, cy);
+            canvas.scale(.72f + progress * .3f, .72f + progress * .3f);
+
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.argb((int)(alpha * 55), 255, 111, 74));
+            canvas.drawCircle(0, -42, 59 + progress * 16, p);
+            p.setColor(Color.argb((int)(alpha * 230), 255, 139, 82));
+            Path outer = new Path();
+            outer.moveTo(0, -112 * rise);
+            outer.cubicTo(-13, -84, -48, -62, -43, -28);
+            outer.cubicTo(-41, 7, -19, 20, 0, 17);
+            outer.cubicTo(32, 20, 49, -5, 43, -35);
+            outer.cubicTo(38, -61, 12, -83, 0, -112 * rise);
+            canvas.drawPath(outer, p);
+
+            p.setColor(Color.argb((int)(alpha * 245), 255, 197, 112));
+            Path middle = new Path();
+            middle.moveTo(0, -78 * rise);
+            middle.cubicTo(-8, -55, -25, -39, -23, -16);
+            middle.cubicTo(-20, 5, -7, 13, 0, 12);
+            middle.cubicTo(21, 8, 25, -10, 17, -30);
+            middle.cubicTo(13, -47, 4, -61, 0, -78 * rise);
+            canvas.drawPath(middle, p);
+
+            p.setColor(Color.argb((int)(alpha * 250), 255, 239, 190));
+            canvas.drawOval(new RectF(-8, -29, 8, 5), p);
+            canvas.restore();
+
+            // Sparks shoot outward in a short, clean burst.
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeWidth(dp(2.5f));
+            for (int i = 0; i < 12; i++) {
+                double angle = (Math.PI * 2 * i / 12.0) - Math.PI / 2;
+                float distance = dp(28 + progress * 62);
+                float sx = cx + (float)Math.cos(angle) * distance;
+                float sy = cy - dp(48) + (float)Math.sin(angle) * distance;
+                int color = i % 3 == 0 ? 0xFFFFD18D : i % 3 == 1 ? 0xFFFF8C69 : 0xFFFFE7B8;
+                p.setColor(Color.argb((int)(alpha * 255), Color.red(color),
+                        Color.green(color), Color.blue(color)));
+                canvas.drawLine(sx, sy, sx + (float)Math.cos(angle) * dp(7),
+                        sy + (float)Math.sin(angle) * dp(7), p);
+            }
+            p.setStyle(Paint.Style.FILL);
+        }
+
+        @Override protected void onDetachedFromWindow() {
+            if (animator != null) animator.cancel();
+            super.onDetachedFromWindow();
         }
     }
 
